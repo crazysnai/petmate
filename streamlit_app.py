@@ -28,8 +28,6 @@ st.set_page_config(
 
 st.markdown(
     """
-    <link rel="manifest" href="/app/static/manifest.webmanifest">
-    <link rel="icon" href="/app/static/icon.svg" type="image/svg+xml">
     <style>
       [data-testid="stAppViewContainer"] {
         background:
@@ -110,42 +108,6 @@ st.markdown(
       .pm-muted {
         color: rgba(36, 53, 43, .66);
       }
-      .pm-safety {
-        border-left: 4px solid #2f7d57;
-        padding: .75rem 1rem;
-        background: rgba(47, 125, 87, .08);
-        margin: .45rem 0;
-      }
-      .pm-stage {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: .55rem;
-        margin: .6rem 0 1.1rem;
-      }
-      .pm-node {
-        border: 1px solid rgba(36, 53, 43, .14);
-        background: rgba(255,255,255,.74);
-        border-radius: 8px;
-        padding: .75rem;
-        min-height: 94px;
-      }
-      .pm-node-done {
-        background: rgba(47, 125, 87, .12);
-        border-color: rgba(47, 125, 87, .34);
-      }
-      .pm-node-lock {
-        opacity: .58;
-      }
-      .pm-node-title {
-        font-weight: 800;
-        color: #24352b;
-        font-size: .95rem;
-      }
-      .pm-node-copy {
-        color: rgba(36, 53, 43, .66);
-        font-size: .82rem;
-        margin-top: .25rem;
-      }
       button[kind="primary"] {
         background: #2f7d57 !important;
         border-color: #2f7d57 !important;
@@ -164,55 +126,6 @@ st.markdown(
           width: 100% !important;
           flex: 1 1 100% !important;
         }
-      }
-      .pm-watch-shell {
-        max-width: 390px;
-        margin: 0 auto;
-        border: 1px solid rgba(36, 53, 43, .14);
-        border-radius: 28px;
-        background: #101914;
-        padding: 1rem;
-        box-shadow: 0 18px 50px rgba(36, 53, 43, .16);
-      }
-      .pm-watch-screen {
-        border-radius: 20px;
-        background: #f6f3ec;
-        padding: 1rem;
-        min-height: 560px;
-      }
-      .pm-watch-title {
-        font-size: 1.55rem;
-        line-height: 1.08;
-        font-weight: 900;
-        color: #24352b;
-        margin-bottom: .55rem;
-      }
-      .pm-watch-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: .45rem;
-        margin: .55rem 0;
-      }
-      .pm-watch-stat {
-        border-radius: 8px;
-        background: rgba(47, 125, 87, .1);
-        padding: .7rem;
-      }
-      .pm-watch-stat b {
-        display: block;
-        font-size: 1.45rem;
-        line-height: 1;
-        color: #24352b;
-      }
-      .pm-watch-stat span {
-        color: rgba(36, 53, 43, .68);
-        font-size: .78rem;
-      }
-      .pm-parent-install {
-        border: 1px solid rgba(36, 53, 43, .12);
-        border-radius: 8px;
-        background: rgba(255,255,255,.78);
-        padding: 1rem;
       }
     </style>
     """,
@@ -272,16 +185,8 @@ def rerun() -> None:
 
 
 def render_metric_panel(label: str, value: str, note: str) -> None:
-    st.markdown(
-        f"""
-        <div class="pm-panel">
-          <div class="pm-kicker">{label}</div>
-          <div class="pm-big-number">{value}</div>
-          <div class="pm-muted">{note}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.metric(label, value)
+    st.caption(note)
 
 
 def render_task(task: dict) -> None:
@@ -302,19 +207,16 @@ def render_path(adventure: dict) -> None:
         ("500m", "动物线索 +1", distance >= 500 or chances["animal"] > 0),
         ("完成", "领取关卡奖励", completed),
     ]
-    html = ['<div class="pm-stage">']
-    for title, copy, done in nodes:
-        cls = "pm-node pm-node-done" if done else "pm-node pm-node-lock"
-        html.append(
-            f"""
-            <div class="{cls}">
-              <div class="pm-node-title">{title}</div>
-              <div class="pm-node-copy">{copy}</div>
-            </div>
-            """
-        )
-    html.append("</div>")
-    st.markdown("".join(html), unsafe_allow_html=True)
+    cols = st.columns(len(nodes))
+    done_count = 0
+    for col, (title, copy, done) in zip(cols, nodes):
+        if done:
+            done_count += 1
+        with col:
+            st.markdown(f"**{'完成' if done else '待解锁'}**")
+            st.metric(title, "已解锁" if done else "未解锁")
+            st.caption(copy)
+    st.progress(done_count / len(nodes), text=f"成就路径 {done_count}/{len(nodes)}")
 
 
 def compact_names(items: list[dict], fallback: str) -> str:
@@ -350,7 +252,7 @@ def render_parent_report(child_id: int) -> None:
 
     st.markdown("### 安全提醒")
     for note in summary["safety_notes"]:
-        st.markdown(f"<div class='pm-safety'>{note}</div>", unsafe_allow_html=True)
+        st.info(note)
 
     st.download_button(
         "下载今日摘要 JSON",
@@ -395,26 +297,12 @@ def render_parent_settings(child_id: int, settings: dict) -> None:
         )
         rerun()
 
-    st.markdown(
-        """
-        <div class="pm-safety">
-          V0 的安全策略是奖励已经发生的走路行为，而不是把孩子引导到指定现实地点。正式产品还需要登录、家长同意、数据删除、异常检测和更细的未成年人保护流程。
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.info("V0 的安全策略是奖励已经发生的走路行为，而不是把孩子引导到指定现实地点。正式产品还需要登录、家长同意、数据删除、异常检测和更细的未成年人保护流程。")
 
 
 def render_install_help() -> None:
     st.markdown("### 添加到 Android 主屏幕")
-    st.markdown(
-        """
-        <div class="pm-parent-install">
-          用手机浏览器打开家长端地址，点浏览器菜单里的“添加到主屏幕”。这是免费的 PWA-like 体验，不需要安装 APK，也不需要上架应用商店。
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.info("用手机浏览器打开家长端地址，点浏览器菜单里的“添加到主屏幕”。这是免费的 PWA-like 体验，不需要安装 APK，也不需要上架应用商店。")
 
 
 def render_watch_mode(child_id: int, adventure: dict, pet_status: dict, encyclopedia: dict) -> None:
@@ -423,27 +311,14 @@ def render_watch_mode(child_id: int, adventure: dict, pet_status: dict, encyclop
     foods = [item for item in pet_status["inventory"] if item["item_type"] == "food" and item["quantity"] > 0]
     last_animal = encyclopedia["animals"][-1] if encyclopedia["animals"] else None
 
-    st.markdown(
-        """
-        <div class="pm-watch-shell">
-          <div class="pm-watch-screen">
-            <div class="pm-brand">PetMate Watch</div>
-            <div class="pm-watch-title">今天的小探险</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        f"""
-            <div class="pm-watch-row">
-              <div class="pm-watch-stat"><b>{adventure['distance_meters']}m</b><span>今日距离</span></div>
-              <div class="pm-watch-stat"><b>{adventure['exploration_energy']}</b><span>探索能量</span></div>
-              <div class="pm-watch-stat"><b>{chances['plant']}</b><span>植物机会</span></div>
-              <div class="pm-watch-stat"><b>{chances['animal']}</b><span>动物线索</span></div>
-            </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("### PetMate Watch")
+    st.markdown("## 今天的小探险")
+    stat_cols = st.columns(2)
+    stat_cols[0].metric("今日距离", f"{adventure['distance_meters']}m")
+    stat_cols[1].metric("探索能量", adventure["exploration_energy"])
+    chance_cols = st.columns(2)
+    chance_cols[0].metric("植物机会", chances["plant"])
+    chance_cols[1].metric("动物线索", chances["animal"])
 
     st.progress(min(adventure["distance_meters"] / max(adventure["tasks"][0]["target"], 1), 1.0), text=adventure["tasks"][0]["title"])
     st.metric("宠物豆豆", f"Lv{pet['level']}", f"{pet['xp']} XP")
@@ -488,8 +363,6 @@ def render_watch_mode(child_id: int, adventure: dict, pet_status: dict, encyclop
     if adventure["completed"]:
         st.success("今日关卡完成")
 
-    st.markdown("</div></div>", unsafe_allow_html=True)
-
 
 with st.sidebar:
     st.markdown("### PetMate")
@@ -501,8 +374,6 @@ with st.sidebar:
         index=list(VIEW_LABELS.keys()).index(current_view_label()),
     )
     selected_view = VIEW_LABELS[selected_label]
-    if st.query_params.get("view") != selected_view:
-        st.query_params["view"] = selected_view
 
     st.markdown(
         """
@@ -641,7 +512,7 @@ with tabs[1]:
             st.markdown(f"**{recognition['name']}** · {recognition['category']}")
             st.progress(recognition["confidence"], text=f"模拟可信度 {recognition['confidence']:.0%}")
             st.write(scan["knowledge_card"]["knowledge"])
-            st.markdown(f"<div class='pm-safety'>{scan['knowledge_card']['safety_tip']}</div>", unsafe_allow_html=True)
+            st.info(scan["knowledge_card"]["safety_tip"])
             st.write("掉落：", "、".join(item["item_name"] for item in scan["drops"]))
         else:
             st.markdown("### 最近植物发现")
@@ -655,7 +526,7 @@ with tabs[1]:
             st.markdown(f"**{animal['name']}** · {animal['category']} · 友好度 {animal['friendship']}/100")
             st.progress(animal["friendship"] / 100)
             st.write(card["knowledge"])
-            st.markdown(f"<div class='pm-safety'>{card['safety_tip']}</div>", unsafe_allow_html=True)
+            st.info(card["safety_tip"])
         else:
             st.markdown("### 最近动物线索")
             st.write("走到 500 米会解锁动物线索机会。")
