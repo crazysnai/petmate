@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PetMate">
+  <rect width="512" height="512" rx="112" fill="#2F7D57"/>
+  <path d="M256 92c78 0 142 62 142 138 0 92-94 166-142 190-48-24-142-98-142-190 0-76 64-138 142-138Z" fill="#F6F3EC"/>
+  <path d="M191 221c0-44 29-76 65-76s65 32 65 76c0 59-48 108-65 120-17-12-65-61-65-120Z" fill="#79B987"/>
+  <circle cx="211" cy="242" r="18" fill="#24352B"/>
+  <circle cx="301" cy="242" r="18" fill="#24352B"/>
+  <path d="M219 310c23 20 51 20 74 0" fill="none" stroke="#24352B" stroke-width="18" stroke-linecap="round"/>
+</svg>

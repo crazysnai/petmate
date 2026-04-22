@@ -1,0 +1,41 @@
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class ChildCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=32)
+    age: int = Field(ge=6, le=12)
+    guardian_name: str = Field(min_length=1, max_length=32)
+
+
+class PetCreate(BaseModel):
+    child_id: int
+    name: str = Field(min_length=1, max_length=32)
+
+
+class WalkReport(BaseModel):
+    child_id: int
+    distance_delta_meters: int = Field(gt=0, le=3000)
+
+
+class PlantScan(BaseModel):
+    child_id: int
+    image_name: str | None = None
+
+
+class AnimalClueDiscover(BaseModel):
+    child_id: int
+
+
+class FeedPet(BaseModel):
+    child_id: int
+    food_key: str
+
+
+class GuardianSettingsUpdate(BaseModel):
+    child_id: int
+    outdoor_enabled: bool = True
+    animal_clues_enabled: bool = True
+    daily_distance_goal: int = Field(default=500, ge=100, le=3000)
+    max_daily_distance: int = Field(default=3000, ge=500, le=10000)
