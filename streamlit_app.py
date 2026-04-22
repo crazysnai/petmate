@@ -39,6 +39,25 @@ st.markdown(
         background: #ffffff;
         border-right: 1px solid rgba(36, 53, 43, .12);
       }
+      html, body, [class*="css"], [data-testid="stAppViewContainer"],
+      [data-testid="stAppViewContainer"] *,
+      [data-testid="stSidebar"] *,
+      [data-testid="stMarkdownContainer"],
+      [data-testid="stMarkdownContainer"] *,
+      [data-testid="stMetric"],
+      [data-testid="stMetric"] *,
+      [data-testid="stCaptionContainer"],
+      [data-testid="stCaptionContainer"] *,
+      [data-testid="stTabs"] button,
+      [data-testid="stTabs"] button *,
+      label, p, span, div, h1, h2, h3, h4, h5, h6 {
+        color: #24352b !important;
+      }
+      [data-testid="stAlert"] *,
+      [data-testid="stNotification"] *,
+      [data-testid="stException"] * {
+        color: inherit !important;
+      }
       .block-container {
         padding-top: 1.6rem;
         max-width: 1200px;
