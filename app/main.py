@@ -28,6 +28,10 @@ from app.schemas import (
 
 app = FastAPI(title="PetMate Adventure API", version="0.1.0")
 
+DEFAULT_CHILD_WEIGHT_KG = 25
+STEP_LENGTH_METERS = 0.65
+WALKING_METERS_PER_MINUTE = 75
+
 
 @app.on_event("startup")
 def startup() -> None:
@@ -120,6 +124,19 @@ def change_adventure_xp(db, child_id: int, xp: int) -> None:
         """,
         (xp, child_id, today()),
     )
+
+
+def estimate_activity(distance_meters: int, steps: int | None, active_minutes: int | None) -> dict[str, Any]:
+    estimated_steps = steps if steps is not None else round(distance_meters / STEP_LENGTH_METERS)
+    estimated_minutes = active_minutes if active_minutes is not None else max(1, round(distance_meters / WALKING_METERS_PER_MINUTE))
+    estimated_kcal = round((distance_meters / 1000) * DEFAULT_CHILD_WEIGHT_KG * 0.6, 1)
+    activity_energy = max(1, round(distance_meters / 100 + estimated_minutes / 5))
+    return {
+        "steps": max(0, estimated_steps),
+        "active_minutes": max(0, estimated_minutes),
+        "estimated_kcal": estimated_kcal,
+        "activity_energy": activity_energy,
+    }
 
 
 def progress_counts(db, child_id: int) -> dict[str, int]:
@@ -247,6 +264,13 @@ def adventure_response(db, child_id: int) -> dict[str, Any]:
         "chapter": adventure["chapter"],
         "stage": adventure["stage"],
         "distance_meters": adventure["distance_meters"],
+        "activity": {
+            "steps": adventure["steps"],
+            "active_minutes": adventure["active_minutes"],
+            "estimated_kcal": round(float(adventure["estimated_kcal"]), 1),
+            "activity_energy": adventure["activity_energy"],
+            "kcal_note": "估算值，用于家长健康参考，不作为孩子奖励核心。",
+        },
         "exploration_energy": adventure["exploration_energy"],
         "available_chances": {
             "plant": adventure["plant_chances"],
@@ -358,11 +382,20 @@ def report_walk(payload: WalkReport) -> dict[str, Any]:
         new_energy = after_distance // 100 - before_distance // 100
         new_plant_chances = after_distance // 250 - before_distance // 250
         new_animal_chances = after_distance // 500 - before_distance // 500
+        activity_delta = estimate_activity(
+            payload.distance_delta_meters,
+            payload.steps_delta,
+            payload.active_minutes_delta,
+        )
 
         db.execute(
             """
             UPDATE adventure_day
             SET distance_meters = ?,
+                steps = steps + ?,
+                active_minutes = active_minutes + ?,
+                estimated_kcal = estimated_kcal + ?,
+                activity_energy = activity_energy + ?,
                 exploration_energy = exploration_energy + ?,
                 plant_chances = plant_chances + ?,
                 animal_chances = animal_chances + ?
@@ -370,6 +403,10 @@ def report_walk(payload: WalkReport) -> dict[str, Any]:
             """,
             (
                 after_distance,
+                activity_delta["steps"],
+                activity_delta["active_minutes"],
+                activity_delta["estimated_kcal"],
+                activity_delta["activity_energy"],
                 new_energy,
                 new_plant_chances,
                 new_animal_chances,
@@ -382,6 +419,10 @@ def report_walk(payload: WalkReport) -> dict[str, Any]:
             "exploration_energy": new_energy,
             "plant_chances": new_plant_chances,
             "animal_chances": new_animal_chances,
+            "activity_energy": activity_delta["activity_energy"],
+            "steps": activity_delta["steps"],
+            "active_minutes": activity_delta["active_minutes"],
+            "estimated_kcal": activity_delta["estimated_kcal"],
         }
         return response
 
@@ -727,6 +768,10 @@ def parent_summary_today(child_id: int) -> dict[str, Any]:
             "day": today(),
             "outdoor": {
                 "distance_meters": adventure["distance_meters"],
+                "steps": adventure["activity"]["steps"],
+                "active_minutes": adventure["activity"]["active_minutes"],
+                "estimated_kcal": adventure["activity"]["estimated_kcal"],
+                "activity_energy": adventure["activity"]["activity_energy"],
                 "exploration_energy": adventure["exploration_energy"],
                 "goal_meters": settings["daily_distance_goal"],
             },
@@ -756,7 +801,12 @@ def parent_summary_today(child_id: int) -> dict[str, Any]:
             },
             "pet": pet,
             "today_value": {
-                "worth_it": adventure["distance_meters"] > 0 or counts["plant_scans"] > 0 or counts["animal_clues"] > 0,
+                "worth_it": (
+                    adventure["distance_meters"] > 0
+                    or adventure["activity"]["active_minutes"] > 0
+                    or counts["plant_scans"] > 0
+                    or counts["animal_clues"] > 0
+                ),
                 "learned": learned,
                 "next_action": next_action,
                 "suggestion": (

@@ -71,6 +71,10 @@ def init_db() -> None:
                 child_id INTEGER NOT NULL,
                 day TEXT NOT NULL,
                 distance_meters INTEGER NOT NULL DEFAULT 0,
+                steps INTEGER NOT NULL DEFAULT 0,
+                active_minutes INTEGER NOT NULL DEFAULT 0,
+                estimated_kcal REAL NOT NULL DEFAULT 0,
+                activity_energy INTEGER NOT NULL DEFAULT 0,
                 exploration_energy INTEGER NOT NULL DEFAULT 0,
                 plant_chances INTEGER NOT NULL DEFAULT 0,
                 animal_chances INTEGER NOT NULL DEFAULT 0,
@@ -160,3 +164,13 @@ def init_db() -> None:
             );
             """
         )
+        ensure_column(db, "adventure_day", "steps", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(db, "adventure_day", "active_minutes", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(db, "adventure_day", "estimated_kcal", "REAL NOT NULL DEFAULT 0")
+        ensure_column(db, "adventure_day", "activity_energy", "INTEGER NOT NULL DEFAULT 0")
+
+
+def ensure_column(db: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")

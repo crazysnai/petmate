@@ -17,6 +17,8 @@ class PetCreate(BaseModel):
 class WalkReport(BaseModel):
     child_id: int
     distance_delta_meters: int = Field(gt=0, le=3000)
+    steps_delta: int | None = Field(default=None, ge=0, le=10000)
+    active_minutes_delta: int | None = Field(default=None, ge=0, le=240)
 
 
 class PlantScan(BaseModel):

@@ -125,6 +125,8 @@ INTERACTION_LABELS = {
     "greet": "打招呼",
     "care": "喂伙伴",
 }
+STEP_LENGTH_METERS = 0.65
+WALKING_METERS_PER_MINUTE = 75
 
 
 def current_view_label() -> str:
@@ -187,6 +189,35 @@ def compact_names(items: list[dict], fallback: str) -> str:
     return "、".join(item["name"] for item in items) if items else fallback
 
 
+def estimate_steps(distance_meters: int) -> int:
+    return round(distance_meters / STEP_LENGTH_METERS)
+
+
+def estimate_active_minutes(distance_meters: int) -> int:
+    return max(1, round(distance_meters / WALKING_METERS_PER_MINUTE))
+
+
+def walk_payload(child_id: int, distance_meters: int, active_minutes: int | None = None) -> dict:
+    return {
+        "child_id": child_id,
+        "distance_delta_meters": distance_meters,
+        "steps_delta": estimate_steps(distance_meters),
+        "active_minutes_delta": active_minutes if active_minutes is not None else estimate_active_minutes(distance_meters),
+    }
+
+
+def activity_for(adventure: dict) -> dict:
+    activity = adventure.get("activity") or {}
+    distance = int(adventure.get("distance_meters", 0))
+    return {
+        "steps": int(activity.get("steps", estimate_steps(distance) if distance else 0)),
+        "active_minutes": int(activity.get("active_minutes", estimate_active_minutes(distance) if distance else 0)),
+        "estimated_kcal": float(activity.get("estimated_kcal", round((distance / 1000) * 25 * 0.6, 1))),
+        "activity_energy": int(activity.get("activity_energy", round(distance / 100) if distance else 0)),
+        "kcal_note": activity.get("kcal_note", "估算值，用于家长健康参考。"),
+    }
+
+
 def animal_friendship_to_adopt(animal: dict) -> int:
     return int(animal.get("friendship_to_adopt", max(0, 100 - int(animal.get("friendship", 0)))))
 
@@ -216,6 +247,7 @@ def parent_today_value(summary: dict) -> dict:
     learned.extend(animal.get("name", "动物线索") for animal in discoveries.get("animals", []))
     worth_it = (
         int(outdoor.get("distance_meters", 0)) > 0
+        or int(outdoor.get("active_minutes", 0)) > 0
         or int(discoveries.get("plant_scan_count", 0)) > 0
         or int(discoveries.get("animal_clue_count", 0)) > 0
     )
@@ -248,7 +280,7 @@ def run_demo_flow(child_id: int) -> None:
     target_distance = min(int(settings["daily_distance_goal"]), int(settings["max_daily_distance"]))
     if adventure["distance_meters"] < target_distance:
         delta = target_distance - adventure["distance_meters"]
-        api_post("/api/adventure/walk", {"child_id": child_id, "distance_delta_meters": delta})
+        api_post("/api/adventure/walk", walk_payload(child_id, delta))
         result.append(f"走路 {delta}m")
 
     for image_name in ["dandelion_test.jpg", "clover_test.jpg"]:
@@ -257,7 +289,7 @@ def run_demo_flow(child_id: int) -> None:
         if plant_task and plant_task["completed"]:
             break
         if adventure["available_chances"]["plant"] <= 0:
-            api_post("/api/adventure/walk", {"child_id": child_id, "distance_delta_meters": 250})
+            api_post("/api/adventure/walk", walk_payload(child_id, 250))
             result.append("补充走路 250m")
         scan = api_post("/api/scan/plant", {"child_id": child_id, "image_name": image_name})
         st.session_state.last_scan = scan
@@ -267,7 +299,7 @@ def run_demo_flow(child_id: int) -> None:
     animal_task = task_by_key(adventure, "find_1_animal_clue")
     if animal_task and not animal_task["completed"]:
         if adventure["available_chances"]["animal"] <= 0:
-            api_post("/api/adventure/walk", {"child_id": child_id, "distance_delta_meters": 500})
+            api_post("/api/adventure/walk", walk_payload(child_id, 500))
             result.append("补充走路 500m")
         animal = api_post("/api/discovery/animal-clue", {"child_id": child_id})
         st.session_state.last_animal = animal
@@ -341,6 +373,7 @@ def render_chapter_path(adventure: dict, encyclopedia: dict) -> None:
 def render_today_book(child_id: int, adventure: dict, pet_status: dict, encyclopedia: dict, settings: dict) -> None:
     pet = pet_status["pet"]
     chances = adventure["available_chances"]
+    activity = activity_for(adventure)
     incomplete = first_incomplete_task(adventure)
     active_animal = next((animal for animal in encyclopedia["animals"] if not animal["adopted"]), None)
     if active_animal is None and encyclopedia["animals"]:
@@ -387,6 +420,12 @@ def render_today_book(child_id: int, adventure: dict, pet_status: dict, encyclop
     m2.metric("探索能量", adventure["exploration_energy"], "每 100m +1")
     m3.metric("植物机会", chances["plant"], "每 250m +1")
     m4.metric("动物线索", chances["animal"], "每 500m +1")
+
+    a1, a2, a3, a4 = st.columns(4)
+    a1.metric("今日步数", f"{activity['steps']}")
+    a2.metric("活动分钟", f"{activity['active_minutes']} 分钟")
+    a3.metric("活动能量", activity["activity_energy"], "用于活力反馈")
+    a4.metric("估算消耗", f"{activity['estimated_kcal']:.1f} kcal", "家长参考")
 
     st.markdown("### 三关成就路径")
     render_chapter_path(adventure, encyclopedia)
@@ -557,6 +596,7 @@ def render_garden_tab(child_id: int, pet_status: dict, encyclopedia: dict) -> No
 def render_parent_report(child_id: int) -> None:
     summary = api_get("/api/parent/summary/today", child_id=child_id)
     today_value = parent_today_value(summary)
+    outdoor = summary.get("outdoor", {})
     st.markdown("### 今日是否值得")
     if today_value["worth_it"]:
         st.success(today_value["suggestion"])
@@ -564,10 +604,16 @@ def render_parent_report(child_id: int) -> None:
         st.info("今天还没有产生户外探险记录，可以从走 100m 开始。")
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("户外距离", f"{summary['outdoor']['distance_meters']}m", f"目标 {summary['outdoor']['goal_meters']}m")
-    m2.metric("植物扫描", summary["discoveries"]["plant_scan_count"])
-    m3.metric("动物线索", summary["discoveries"]["animal_clue_count"])
+    m1.metric("户外距离", f"{outdoor.get('distance_meters', 0)}m", f"目标 {outdoor.get('goal_meters', 0)}m")
+    m2.metric("活动分钟", f"{outdoor.get('active_minutes', 0)} 分钟")
+    m3.metric("估算消耗", f"{float(outdoor.get('estimated_kcal', 0)):.1f} kcal")
     m4.metric("今日 XP", summary["adventure"]["xp"])
+
+    h1, h2, h3, h4 = st.columns(4)
+    h1.metric("今日步数", outdoor.get("steps", 0))
+    h2.metric("活动能量", outdoor.get("activity_energy", 0))
+    h3.metric("植物扫描", summary["discoveries"]["plant_scan_count"])
+    h4.metric("动物线索", summary["discoveries"]["animal_clue_count"])
 
     r1, r2 = st.columns([1, 1], gap="large")
     with r1.container(border=True):
@@ -659,6 +705,7 @@ def render_watch_mode(child_id: int, adventure: dict, pet_status: dict, encyclop
     st.markdown("<div class='pm-watch'></div>", unsafe_allow_html=True)
     pet = pet_status["pet"]
     chances = adventure["available_chances"]
+    activity = activity_for(adventure)
     foods = [item for item in pet_status["inventory"] if item["item_type"] == "food" and item["quantity"] > 0]
     active_animal = next((animal for animal in encyclopedia["animals"] if not animal["adopted"]), None)
     if active_animal is None and encyclopedia["animals"]:
@@ -674,6 +721,9 @@ def render_watch_mode(child_id: int, adventure: dict, pet_status: dict, encyclop
     c3, c4 = st.columns(2)
     c3.metric("植物机会", chances["plant"])
     c4.metric("动物线索", chances["animal"])
+    c5, c6 = st.columns(2)
+    c5.metric("活动分钟", f"{activity['active_minutes']}")
+    c6.metric("活动能量", activity["activity_energy"])
 
     if active_animal:
         st.metric("伙伴", active_animal["name"], f"{active_animal['friendship']}/100")
@@ -682,10 +732,10 @@ def render_watch_mode(child_id: int, adventure: dict, pet_status: dict, encyclop
         st.info("走到 500m 找线索")
 
     if st.button("走 100m", use_container_width=True, type="primary", key="watch_walk_100"):
-        api_post("/api/adventure/walk", {"child_id": child_id, "distance_delta_meters": 100})
+        api_post("/api/adventure/walk", walk_payload(child_id, 100))
         rerun()
     if st.button("走 250m", use_container_width=True, key="watch_walk_250"):
-        api_post("/api/adventure/walk", {"child_id": child_id, "distance_delta_meters": 250})
+        api_post("/api/adventure/walk", walk_payload(child_id, 250))
         rerun()
     if st.button("发现植物", use_container_width=True, disabled=chances["plant"] <= 0, key="watch_scan"):
         st.session_state.last_scan = api_post(
@@ -745,8 +795,16 @@ with st.sidebar:
     st.divider()
     st.markdown("**演示操作**")
     quick_walk = st.selectbox("本次上报距离", [100, 250, 500, 750], index=2, format_func=lambda x: f"{x} 米")
+    quick_minutes = st.number_input(
+        "本次活动分钟",
+        min_value=1,
+        max_value=120,
+        value=estimate_active_minutes(int(quick_walk)),
+        step=1,
+    )
+    st.caption(f"估算步数：{estimate_steps(int(quick_walk))} 步。未来接手表后可替换为真实设备数据。")
     if st.button("上报走路", use_container_width=True, type="primary"):
-        api_post("/api/adventure/walk", {"child_id": child_id, "distance_delta_meters": quick_walk})
+        api_post("/api/adventure/walk", walk_payload(child_id, int(quick_walk), int(quick_minutes)))
         rerun()
 
     if st.button("新建演示孩子", use_container_width=True):
@@ -754,7 +812,7 @@ with st.sidebar:
         reset_result_state()
         rerun()
 
-    st.caption("V0 只记录累计距离，不记录轨迹或路线。")
+    st.caption("V0 记录累计距离、步数、活动分钟和估算消耗，不记录轨迹或路线。")
 
 
 adventure = api_get("/api/adventure/today", child_id=child_id)
