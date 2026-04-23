@@ -187,6 +187,59 @@ def compact_names(items: list[dict], fallback: str) -> str:
     return "、".join(item["name"] for item in items) if items else fallback
 
 
+def animal_friendship_to_adopt(animal: dict) -> int:
+    return int(animal.get("friendship_to_adopt", max(0, 100 - int(animal.get("friendship", 0)))))
+
+
+def animal_favorite(animal: dict) -> str:
+    return str(animal.get("favorite") or "自然食材")
+
+
+def animal_habitat(animal: dict) -> str:
+    return str(animal.get("habitat") or "安全户外区域")
+
+
+def parent_today_value(summary: dict) -> dict:
+    existing = summary.get("today_value")
+    if isinstance(existing, dict):
+        return {
+            "worth_it": bool(existing.get("worth_it", False)),
+            "learned": list(existing.get("learned", [])),
+            "next_action": str(existing.get("next_action", "继续完成今日探险。")),
+            "suggestion": str(existing.get("suggestion", existing.get("next_action", "继续完成今日探险。"))),
+        }
+
+    discoveries = summary.get("discoveries", {})
+    adventure = summary.get("adventure", {})
+    outdoor = summary.get("outdoor", {})
+    learned = list(discoveries.get("plants", []))
+    learned.extend(animal.get("name", "动物线索") for animal in discoveries.get("animals", []))
+    worth_it = (
+        int(outdoor.get("distance_meters", 0)) > 0
+        or int(discoveries.get("plant_scan_count", 0)) > 0
+        or int(discoveries.get("animal_clue_count", 0)) > 0
+    )
+
+    next_action = "继续完成今日探险。"
+    for task in adventure.get("tasks", []):
+        if not task.get("completed") and not task.get("optional"):
+            next_action = f"下一步建议：{task.get('title', '完成未完成任务')}。"
+            break
+    else:
+        animals = discoveries.get("animals", [])
+        if animals:
+            next_action = f"可以和{animals[0].get('name', '动物伙伴')}打招呼，继续提升友好度。"
+        elif adventure.get("completed"):
+            next_action = "今日闭环已完成，可以复盘孩子观察到的知识点。"
+
+    return {
+        "worth_it": worth_it,
+        "learned": learned,
+        "next_action": next_action,
+        "suggestion": "今天已经产生可复盘的自然探险记录。" if worth_it else "今天还没有产生户外探险记录，可以从走 100m 开始。",
+    }
+
+
 def run_demo_flow(child_id: int) -> None:
     result: list[str] = []
     settings = api_get("/api/parent/settings", child_id=child_id)
@@ -323,9 +376,9 @@ def render_today_book(child_id: int, adventure: dict, pet_status: dict, encyclop
     with animal_col.container(border=True):
         st.markdown("### 动物伙伴")
         if active_animal:
-            state = "已领养伙伴" if active_animal["adopted"] else f"还差 {active_animal['friendship_to_adopt']} 友好度"
+            state = "已领养伙伴" if active_animal["adopted"] else f"还差 {animal_friendship_to_adopt(active_animal)} 友好度"
             st.metric(active_animal["name"], f"{active_animal['friendship']}/100", state)
-            st.progress(active_animal["friendship"] / 100, text=active_animal["habitat"])
+            st.progress(active_animal["friendship"] / 100, text=animal_habitat(active_animal))
         else:
             st.info("走到 500m 后可发现动物线索")
 
@@ -379,12 +432,14 @@ def render_animal_result(result: dict | None) -> None:
         st.info("走到 500m 会解锁动物线索。动物只做远距离观察和虚拟领养。")
         return
     animal = result["animal_clue"]
+    favorite = animal.get("favorite", "自然食材")
+    greeting = animal.get("greeting", "伙伴回应了你的观察。")
     st.markdown(f"### {animal['name']}")
-    st.caption(f"{animal['category']} · {animal['rarity']} · 喜欢 {animal['favorite']}")
+    st.caption(f"{animal['category']} · {animal['rarity']} · 喜欢 {favorite}")
     st.progress(animal["friendship"] / 100, text=f"友好度 {animal['friendship']}/100")
     st.write(result["knowledge_card"]["knowledge"])
     st.info(result["knowledge_card"]["safety_tip"])
-    st.success(animal["greeting"])
+    st.success(greeting)
     animal_task = task_by_key(result["adventure"], "find_1_animal_clue")
     if animal_task:
         render_task(animal_task)
@@ -483,9 +538,9 @@ def render_garden_tab(child_id: int, pet_status: dict, encyclopedia: dict) -> No
             st.info("发现动物线索后，这里会出现可互动的虚拟伙伴。")
         for animal in encyclopedia["animals"]:
             with st.container(border=True):
-                status = "已领养伙伴" if animal["adopted"] else f"还差 {animal['friendship_to_adopt']} 友好度可领养"
+                status = "已领养伙伴" if animal["adopted"] else f"还差 {animal_friendship_to_adopt(animal)} 友好度可领养"
                 st.markdown(f"#### {animal['name']} · {animal['category']}")
-                st.caption(f"喜欢：{animal['favorite']} · 常见环境：{animal['habitat']}")
+                st.caption(f"喜欢：{animal_favorite(animal)} · 常见环境：{animal_habitat(animal)}")
                 st.progress(animal["friendship"] / 100, text=f"{status} · {animal['friendship']}/100")
                 st.write(animal["knowledge"])
                 st.info(animal["safety_tip"])
@@ -501,9 +556,10 @@ def render_garden_tab(child_id: int, pet_status: dict, encyclopedia: dict) -> No
 
 def render_parent_report(child_id: int) -> None:
     summary = api_get("/api/parent/summary/today", child_id=child_id)
+    today_value = parent_today_value(summary)
     st.markdown("### 今日是否值得")
-    if summary["today_value"]["worth_it"]:
-        st.success(summary["today_value"]["suggestion"])
+    if today_value["worth_it"]:
+        st.success(today_value["suggestion"])
     else:
         st.info("今天还没有产生户外探险记录，可以从走 100m 开始。")
 
@@ -516,8 +572,8 @@ def render_parent_report(child_id: int) -> None:
     r1, r2 = st.columns([1, 1], gap="large")
     with r1.container(border=True):
         st.markdown("### 孩子今日建议")
-        st.write(summary["today_value"]["next_action"])
-        learned = summary["today_value"]["learned"]
+        st.write(today_value["next_action"])
+        learned = today_value["learned"]
         st.caption("学到：" + ("、".join(learned) if learned else "暂无发现"))
     with r2.container(border=True):
         st.markdown("### 安全提醒")
@@ -532,8 +588,8 @@ def render_parent_report(child_id: int) -> None:
     st.write("植物：" + ("、".join(summary["discoveries"]["plants"]) if summary["discoveries"]["plants"] else "暂无"))
     if summary["discoveries"]["animals"]:
         for animal in summary["discoveries"]["animals"]:
-            adopted = "已领养" if animal["adopted"] else f"还差 {animal['friendship_to_adopt']}"
-            st.write(f"{animal['name']}：友好度 {animal['friendship']}/100 · {adopted} · 喜欢 {animal['favorite']}")
+            adopted = "已领养" if animal["adopted"] else f"还差 {animal_friendship_to_adopt(animal)}"
+            st.write(f"{animal['name']}：友好度 {animal['friendship']}/100 · {adopted} · 喜欢 {animal_favorite(animal)}")
     else:
         st.write("动物线索：暂无")
 
