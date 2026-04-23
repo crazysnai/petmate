@@ -48,8 +48,16 @@ def init_db() -> None:
                 child_id INTEGER PRIMARY KEY,
                 outdoor_enabled INTEGER NOT NULL DEFAULT 1,
                 animal_clues_enabled INTEGER NOT NULL DEFAULT 1,
+                friends_enabled INTEGER NOT NULL DEFAULT 0,
+                garden_help_enabled INTEGER NOT NULL DEFAULT 1,
+                garden_likes_enabled INTEGER NOT NULL DEFAULT 1,
                 daily_distance_goal INTEGER NOT NULL DEFAULT 500,
                 max_daily_distance INTEGER NOT NULL DEFAULT 3000,
+                sleep_start TEXT NOT NULL DEFAULT '21:00',
+                sleep_end TEXT NOT NULL DEFAULT '07:00',
+                study_mode_enabled INTEGER NOT NULL DEFAULT 1,
+                study_start TEXT NOT NULL DEFAULT '08:00',
+                study_end TEXT NOT NULL DEFAULT '17:00',
                 FOREIGN KEY(child_id) REFERENCES child(id) ON DELETE CASCADE
             );
 
@@ -109,6 +117,16 @@ def init_db() -> None:
                 safety_tip TEXT NOT NULL,
                 count INTEGER NOT NULL DEFAULT 1,
                 friendship INTEGER NOT NULL DEFAULT 0,
+                mood INTEGER NOT NULL DEFAULT 50,
+                trust INTEGER NOT NULL DEFAULT 20,
+                curiosity INTEGER NOT NULL DEFAULT 40,
+                home_level INTEGER NOT NULL DEFAULT 1,
+                growth_points INTEGER NOT NULL DEFAULT 0,
+                away_state TEXT NOT NULL DEFAULT 'home',
+                away_reason TEXT NOT NULL DEFAULT '',
+                keepsake TEXT NOT NULL DEFAULT '',
+                away_at TEXT,
+                memory TEXT NOT NULL DEFAULT '',
                 adopted INTEGER NOT NULL DEFAULT 0,
                 first_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -158,6 +176,7 @@ def init_db() -> None:
                 animal_name TEXT NOT NULL,
                 action TEXT NOT NULL,
                 friendship_added INTEGER NOT NULL,
+                energy_cost INTEGER NOT NULL DEFAULT 0,
                 xp INTEGER NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(child_id) REFERENCES child(id) ON DELETE CASCADE
@@ -168,6 +187,25 @@ def init_db() -> None:
         ensure_column(db, "adventure_day", "active_minutes", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(db, "adventure_day", "estimated_kcal", "REAL NOT NULL DEFAULT 0")
         ensure_column(db, "adventure_day", "activity_energy", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(db, "guardian_settings", "sleep_start", "TEXT NOT NULL DEFAULT '21:00'")
+        ensure_column(db, "guardian_settings", "sleep_end", "TEXT NOT NULL DEFAULT '07:00'")
+        ensure_column(db, "guardian_settings", "study_mode_enabled", "INTEGER NOT NULL DEFAULT 1")
+        ensure_column(db, "guardian_settings", "study_start", "TEXT NOT NULL DEFAULT '08:00'")
+        ensure_column(db, "guardian_settings", "study_end", "TEXT NOT NULL DEFAULT '17:00'")
+        ensure_column(db, "guardian_settings", "friends_enabled", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(db, "guardian_settings", "garden_help_enabled", "INTEGER NOT NULL DEFAULT 1")
+        ensure_column(db, "guardian_settings", "garden_likes_enabled", "INTEGER NOT NULL DEFAULT 1")
+        ensure_column(db, "encyclopedia_entry", "mood", "INTEGER NOT NULL DEFAULT 50")
+        ensure_column(db, "encyclopedia_entry", "trust", "INTEGER NOT NULL DEFAULT 20")
+        ensure_column(db, "encyclopedia_entry", "curiosity", "INTEGER NOT NULL DEFAULT 40")
+        ensure_column(db, "encyclopedia_entry", "home_level", "INTEGER NOT NULL DEFAULT 1")
+        ensure_column(db, "encyclopedia_entry", "growth_points", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(db, "encyclopedia_entry", "away_state", "TEXT NOT NULL DEFAULT 'home'")
+        ensure_column(db, "encyclopedia_entry", "away_reason", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "encyclopedia_entry", "keepsake", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "encyclopedia_entry", "away_at", "TEXT")
+        ensure_column(db, "encyclopedia_entry", "memory", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "animal_interaction_log", "energy_cost", "INTEGER NOT NULL DEFAULT 0")
 
 
 def ensure_column(db: sqlite3.Connection, table: str, column: str, definition: str) -> None:

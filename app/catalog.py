@@ -103,9 +103,89 @@ ANIMAL_CLUES: list[AnimalClue] = [
 
 
 ANIMAL_INTERACTIONS = {
-    "observe": {"label": "观察", "friendship": 8, "xp": 5, "message": "你保持距离观察，伙伴更信任你了。"},
-    "greet": {"label": "打招呼", "friendship": 10, "xp": 5, "message": "你轻轻打招呼，伙伴回应了你的陪伴。"},
-    "care": {"label": "照顾伙伴", "friendship": 15, "xp": 8, "message": "你用今天的发现照顾伙伴，友好度提升了。"},
+    "observe": {
+        "label": "观察",
+        "energy_cost": 1,
+        "friendship": 6,
+        "mood": 3,
+        "trust": 5,
+        "curiosity": 6,
+        "xp": 4,
+        "memory": "你安静地观察了一会儿，伙伴记住了你的耐心。",
+        "message": "保持距离观察，伙伴更愿意靠近你的世界。",
+    },
+    "greet": {
+        "label": "打招呼",
+        "energy_cost": 1,
+        "friendship": 8,
+        "mood": 6,
+        "trust": 4,
+        "curiosity": 2,
+        "xp": 5,
+        "memory": "你轻轻打招呼，伙伴回应了今天的问候。",
+        "message": "伙伴回应了你的陪伴。",
+    },
+    "share_food": {
+        "label": "分享食材",
+        "energy_cost": 2,
+        "friendship": 12,
+        "mood": 9,
+        "trust": 7,
+        "curiosity": 3,
+        "xp": 7,
+        "memory": "你把今天发现的食材故事讲给伙伴听，它显得很开心。",
+        "message": "分享今天的自然发现，伙伴心情提升了。",
+    },
+    "play": {
+        "label": "一起玩",
+        "energy_cost": 3,
+        "friendship": 14,
+        "mood": 12,
+        "trust": 4,
+        "curiosity": 8,
+        "xp": 9,
+        "memory": "你们玩了一个小小的观察游戏，伙伴变得更有精神。",
+        "message": "一起玩让伙伴更活跃，也更期待下一次探险。",
+    },
+    "mini_adventure": {
+        "label": "小探险",
+        "energy_cost": 4,
+        "friendship": 18,
+        "mood": 8,
+        "trust": 10,
+        "curiosity": 12,
+        "xp": 12,
+        "memory": "你们完成了一次小探险，伙伴记住了今天的路线感。",
+        "message": "伙伴和你完成了一次小探险，信任明显增加。",
+    },
+    "decorate_home": {
+        "label": "布置小窝",
+        "energy_cost": 3,
+        "friendship": 10,
+        "mood": 10,
+        "trust": 8,
+        "curiosity": 4,
+        "home": 1,
+        "xp": 8,
+        "memory": "你用自然发现布置了小窝，伙伴有了更安心的角落。",
+        "message": "小窝变舒服了，伙伴更愿意留下来。",
+    },
+}
+
+
+ANIMAL_DAILY_REQUESTS = {
+    "sparrow": {
+        "title": "想看一种植物",
+        "hint": "今天扫描 1 种植物后，麻雀会更开心。",
+    },
+    "butterfly": {
+        "title": "想要 5 分钟活动",
+        "hint": "今天活动 5 分钟后，蝴蝶会绕着花飞一圈。",
+    },
+    "snail": {
+        "title": "想慢慢走 300 米",
+        "hint": "今天走到 300 米后，蜗牛会留下新的安静记忆。",
+    },
 }
 
 

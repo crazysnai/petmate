@@ -41,6 +41,26 @@ def main() -> None:
     child_id = child["child"]["id"]
     show("创建孩子", child)
 
+    settings = assert_ok(
+        client.post(
+            "/api/parent/settings",
+            json={
+                "child_id": child_id,
+                "outdoor_enabled": True,
+                "animal_clues_enabled": True,
+                "daily_distance_goal": 500,
+                "max_daily_distance": 3000,
+                "sleep_start": "23:59",
+                "sleep_end": "00:01",
+                "study_mode_enabled": False,
+                "study_start": "08:00",
+                "study_end": "17:00",
+            },
+        ),
+        "set demo rhythm",
+    )
+    show("设置演示作息", settings)
+
     pet = assert_ok(
         client.post("/api/pet/create", json={"child_id": child_id, "name": "豆豆"}),
         "create pet",

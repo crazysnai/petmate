@@ -39,11 +39,19 @@ class GuardianSettingsUpdate(BaseModel):
     child_id: int
     outdoor_enabled: bool = True
     animal_clues_enabled: bool = True
+    friends_enabled: bool = False
+    garden_help_enabled: bool = True
+    garden_likes_enabled: bool = True
     daily_distance_goal: int = Field(default=500, ge=100, le=3000)
     max_daily_distance: int = Field(default=3000, ge=500, le=10000)
+    sleep_start: str = Field(default="21:00", pattern=r"^\d{2}:\d{2}$")
+    sleep_end: str = Field(default="07:00", pattern=r"^\d{2}:\d{2}$")
+    study_mode_enabled: bool = True
+    study_start: str = Field(default="08:00", pattern=r"^\d{2}:\d{2}$")
+    study_end: str = Field(default="17:00", pattern=r"^\d{2}:\d{2}$")
 
 
 class AnimalInteract(BaseModel):
     child_id: int
     animal_key: str = Field(min_length=1, max_length=32)
-    action: str = Field(pattern="^(observe|greet|care)$")
+    action: str = Field(pattern="^(observe|greet|share_food|play|mini_adventure|decorate_home)$")
