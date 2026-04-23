@@ -765,13 +765,8 @@ def next_action_for(adventure: dict[str, Any], animals: list[dict[str, Any]]) ->
     return "今天已经完成完整探险，明天可以继续观察新的植物和动物线索。"
 
 
-def adventure_response(db, child_id: int) -> dict[str, Any]:
-    adventure = ensure_adventure_day(db, child_id)
-    settings = get_guardian_settings(db, child_id)
-    rhythm = rhythm_response(settings)
-    walk_target = int(settings["daily_distance_goal"])
-    counts = progress_counts(db, child_id)
-    tasks = [
+def build_adventure_tasks(adventure: dict[str, Any], walk_target: int, counts: dict[str, int]) -> list[dict[str, Any]]:
+    return [
         {
             "key": "walk_daily_goal",
             "title": f"户外走 {walk_target} 米",
@@ -809,18 +804,44 @@ def adventure_response(db, child_id: int) -> dict[str, Any]:
             "optional": True,
         },
     ]
+
+
+def finalize_adventure_completion(
+    db,
+    child_id: int,
+    adventure: dict[str, Any] | None = None,
+    counts: dict[str, int] | None = None,
+) -> bool:
+    adventure = adventure or ensure_adventure_day(db, child_id)
+    counts = counts or progress_counts(db, child_id)
+    settings = get_guardian_settings(db, child_id)
+    tasks = build_adventure_tasks(adventure, int(settings["daily_distance_goal"]), counts)
     completed = all(task["completed"] for task in tasks if not task.get("optional"))
-    if completed and not adventure["completed"]:
-        db.execute(
-            """
-            UPDATE adventure_day
-            SET completed = 1, reward_claimed = 1, xp = xp + 50
-            WHERE child_id = ? AND day = ?
-            """,
-            (child_id, today()),
-        )
-        add_pet_xp(db, child_id, 50)
-        adventure = ensure_adventure_day(db, child_id)
+    if not completed or adventure["completed"]:
+        return False
+
+    cursor = db.execute(
+        """
+        UPDATE adventure_day
+        SET completed = 1, reward_claimed = 1, xp = xp + 50
+        WHERE child_id = ? AND day = ? AND completed = 0
+        """,
+        (child_id, today()),
+    )
+    if not cursor.rowcount:
+        return False
+
+    add_pet_xp(db, child_id, 50)
+    return True
+
+
+def adventure_response(db, child_id: int) -> dict[str, Any]:
+    adventure = ensure_adventure_day(db, child_id)
+    settings = get_guardian_settings(db, child_id)
+    rhythm = rhythm_response(settings)
+    walk_target = int(settings["daily_distance_goal"])
+    counts = progress_counts(db, child_id)
+    tasks = build_adventure_tasks(adventure, walk_target, counts)
 
     return {
         "child_id": child_id,
@@ -983,6 +1004,7 @@ def report_walk(payload: WalkReport) -> dict[str, Any]:
                 today(),
             ),
         )
+        finalize_adventure_completion(db, payload.child_id)
         response = adventure_response(db, payload.child_id)
         response["unlocked"] = {
             "exploration_energy": new_energy,
@@ -1047,6 +1069,7 @@ def scan_plant(payload: PlantScan) -> dict[str, Any]:
             (plant.xp, payload.child_id, today()),
         )
         add_pet_xp(db, payload.child_id, plant.xp)
+        finalize_adventure_completion(db, payload.child_id)
 
         return {
             "recognition": {
@@ -1158,6 +1181,7 @@ def discover_animal_clue(payload: AnimalClueDiscover) -> dict[str, Any]:
             (clue.xp, payload.child_id, today()),
         )
         add_pet_xp(db, payload.child_id, clue.xp)
+        finalize_adventure_completion(db, payload.child_id)
 
         return {
             "animal_clue": {
@@ -1276,6 +1300,7 @@ def interact_with_animal(payload: AnimalInteract) -> dict[str, Any]:
         )
         change_adventure_xp(db, payload.child_id, xp)
         add_pet_xp(db, payload.child_id, xp)
+        finalize_adventure_completion(db, payload.child_id)
 
         updated = row_to_dict(
             db.execute(
@@ -1387,6 +1412,7 @@ def feed_pet(payload: FeedPet) -> dict[str, Any]:
         )
         change_adventure_xp(db, payload.child_id, effect["xp"])
         updated_pet = add_pet_xp(db, payload.child_id, effect["xp"])
+        finalize_adventure_completion(db, payload.child_id)
 
         return {
             "pet": updated_pet,

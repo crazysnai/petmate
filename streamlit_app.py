@@ -586,7 +586,7 @@ def render_friend_quests(encyclopedia: dict, adventure: dict) -> None:
     )
     quests = [
         {
-            "title": "本周一起走 1500m",
+            "title": "今天一起走 1500m",
             "current": min(int(adventure.get("distance_meters", 0)) + friend_distance, 1500),
             "target": 1500,
             "reward": "共同探险章进度 +1，双方花园出现友谊叶环。",
