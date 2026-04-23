@@ -5,10 +5,19 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
-from app.catalog import ANIMAL_CLUES, FOOD_EFFECTS, PLANTS, choose_animal, choose_plant
+from app.catalog import (
+    ANIMAL_CLUES,
+    ANIMAL_INTERACTIONS,
+    FOOD_EFFECTS,
+    PLANTS,
+    animal_by_key,
+    choose_animal,
+    choose_plant,
+)
 from app.database import get_db, init_db, row_to_dict
 from app.schemas import (
     AnimalClueDiscover,
+    AnimalInteract,
     ChildCreate,
     FeedPet,
     GuardianSettingsUpdate,
@@ -138,7 +147,42 @@ def progress_counts(db, child_id: int) -> dict[str, int]:
         """,
         (child_id, today()),
     ).fetchone()["count"]
-    return {"plant_scans": scans, "animal_clues": animals, "feeds": feeds}
+    interactions = db.execute(
+        """
+        SELECT COUNT(*) AS count
+        FROM animal_interaction_log
+        WHERE child_id = ? AND date(created_at, '+8 hours') = ?
+        """,
+        (child_id, today()),
+    ).fetchone()["count"]
+    return {"plant_scans": scans, "animal_clues": animals, "feeds": feeds, "animal_interactions": interactions}
+
+
+def enriched_animals(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for entry in entries:
+        animal = animal_by_key(entry["entry_key"])
+        enriched.append(
+            {
+                **entry,
+                "favorite": animal.favorite if animal else "自然食材",
+                "habitat": animal.habitat if animal else "安全户外区域",
+                "greeting": animal.greeting if animal else "伙伴回应了你的观察。",
+                "friendship_to_adopt": max(0, 100 - int(entry["friendship"])),
+            }
+        )
+    return enriched
+
+
+def next_action_for(adventure: dict[str, Any], animals: list[dict[str, Any]]) -> str:
+    if not adventure["completed"]:
+        for task in adventure["tasks"]:
+            if not task["completed"] and not task.get("optional"):
+                return f"下一步建议：{task['title']}。"
+    active = next((animal for animal in animals if not animal["adopted"]), None)
+    if active is not None:
+        return f"可以和{active['name']}打招呼，继续提升友好度。"
+    return "今天已经完成完整探险，明天可以继续观察新的植物和动物线索。"
 
 
 def adventure_response(db, child_id: int) -> dict[str, Any]:
@@ -175,8 +219,16 @@ def adventure_response(db, child_id: int) -> dict[str, Any]:
             "current": min(counts["feeds"], 1),
             "completed": counts["feeds"] >= 1,
         },
+        {
+            "key": "animal_interact_once",
+            "title": "和动物伙伴互动 1 次",
+            "target": 1,
+            "current": min(counts["animal_interactions"], 1),
+            "completed": counts["animal_interactions"] >= 1,
+            "optional": True,
+        },
     ]
-    completed = all(task["completed"] for task in tasks)
+    completed = all(task["completed"] for task in tasks if not task.get("optional"))
     if completed and not adventure["completed"]:
         db.execute(
             """
@@ -484,11 +536,92 @@ def discover_animal_clue(payload: AnimalClueDiscover) -> dict[str, Any]:
                 "rarity": clue.rarity,
                 "friendship": new_friendship,
                 "adopted": bool(adopted),
+                "favorite": clue.favorite,
+                "habitat": clue.habitat,
+                "greeting": clue.greeting,
+                "friendship_to_adopt": max(0, 100 - new_friendship),
             },
             "knowledge_card": {
                 "knowledge": clue.knowledge,
                 "safety_tip": clue.safety_tip,
             },
+            "adventure": adventure_response(db, payload.child_id),
+        }
+
+
+@app.post("/api/animal/interact")
+def interact_with_animal(payload: AnimalInteract) -> dict[str, Any]:
+    with get_db() as db:
+        require_child(db, payload.child_id)
+        interaction = ANIMAL_INTERACTIONS.get(payload.action)
+        if interaction is None:
+            raise HTTPException(status_code=400, detail="Unsupported animal interaction")
+
+        animal = animal_by_key(payload.animal_key)
+        if animal is None:
+            raise HTTPException(status_code=404, detail="Animal is not in catalog")
+
+        entry = row_to_dict(
+            db.execute(
+                """
+                SELECT *
+                FROM encyclopedia_entry
+                WHERE child_id = ? AND entry_type = 'animal' AND entry_key = ?
+                """,
+                (payload.child_id, payload.animal_key),
+            ).fetchone()
+        )
+        if entry is None:
+            raise HTTPException(status_code=400, detail="Discover this animal clue before interacting")
+
+        friendship_added = int(interaction["friendship"])
+        new_friendship = min(100, int(entry["friendship"]) + friendship_added)
+        adopted = 1 if new_friendship >= 100 else 0
+        xp = int(interaction["xp"])
+
+        db.execute(
+            """
+            UPDATE encyclopedia_entry
+            SET friendship = ?,
+                adopted = ?,
+                last_seen = CURRENT_TIMESTAMP
+            WHERE child_id = ? AND entry_type = 'animal' AND entry_key = ?
+            """,
+            (new_friendship, adopted, payload.child_id, payload.animal_key),
+        )
+        db.execute(
+            """
+            INSERT INTO animal_interaction_log
+            (child_id, animal_key, animal_name, action, friendship_added, xp)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (payload.child_id, animal.key, animal.name, payload.action, friendship_added, xp),
+        )
+        change_adventure_xp(db, payload.child_id, xp)
+        add_pet_xp(db, payload.child_id, xp)
+
+        updated = row_to_dict(
+            db.execute(
+                """
+                SELECT entry_type, entry_key, name, category, knowledge, safety_tip,
+                       count, friendship, adopted, first_seen, last_seen
+                FROM encyclopedia_entry
+                WHERE child_id = ? AND entry_type = 'animal' AND entry_key = ?
+                """,
+                (payload.child_id, payload.animal_key),
+            ).fetchone()
+        )
+        enriched = enriched_animals([updated])[0] if updated else {}
+        return {
+            "animal": enriched,
+            "interaction": {
+                "action": payload.action,
+                "label": interaction["label"],
+                "friendship_added": friendship_added,
+                "xp": xp,
+                "message": interaction["message"],
+            },
+            "safety_tip": "只做远距离观察和虚拟互动，不触摸、不追赶、不投喂真实动物。",
             "adventure": adventure_response(db, payload.child_id),
         }
 
@@ -567,10 +700,12 @@ def encyclopedia(child_id: int) -> dict[str, Any]:
             (child_id,),
         ).fetchall()
         entries = [dict(row) for row in rows]
+        plants = [entry for entry in entries if entry["entry_type"] == "plant"]
+        animals = enriched_animals([entry for entry in entries if entry["entry_type"] == "animal"])
         return {
             "child_id": child_id,
-            "plants": [entry for entry in entries if entry["entry_type"] == "plant"],
-            "animals": [entry for entry in entries if entry["entry_type"] == "animal"],
+            "plants": plants,
+            "animals": animals,
         }
 
 
@@ -582,7 +717,11 @@ def parent_summary_today(child_id: int) -> dict[str, Any]:
         adventure = adventure_response(db, child_id)
         pet = get_pet(db, child_id)
         encyclopedia_data = encyclopedia(child_id)
+        animals = encyclopedia_data["animals"]
         counts = progress_counts(db, child_id)
+        learned = [entry["name"] for entry in encyclopedia_data["plants"][-3:]]
+        learned.extend(entry["name"] for entry in animals[-2:])
+        next_action = next_action_for(adventure, animals)
         return {
             "child": {"id": child["id"], "name": child["name"], "age": child["age"]},
             "day": today(),
@@ -601,17 +740,31 @@ def parent_summary_today(child_id: int) -> dict[str, Any]:
             "discoveries": {
                 "plant_scan_count": counts["plant_scans"],
                 "animal_clue_count": counts["animal_clues"],
+                "animal_interaction_count": counts["animal_interactions"],
                 "plants": [entry["name"] for entry in encyclopedia_data["plants"]],
                 "animals": [
                     {
                         "name": entry["name"],
                         "friendship": entry["friendship"],
                         "adopted": bool(entry["adopted"]),
+                        "favorite": entry["favorite"],
+                        "habitat": entry["habitat"],
+                        "friendship_to_adopt": entry["friendship_to_adopt"],
                     }
-                    for entry in encyclopedia_data["animals"]
+                    for entry in animals
                 ],
             },
             "pet": pet,
+            "today_value": {
+                "worth_it": adventure["distance_meters"] > 0 or counts["plant_scans"] > 0 or counts["animal_clues"] > 0,
+                "learned": learned,
+                "next_action": next_action,
+                "suggestion": (
+                    "今日闭环已完成，可以把重点放在复盘孩子观察到的知识点。"
+                    if adventure["completed"]
+                    else next_action
+                ),
+            },
             "safety_notes": [
                 "本版本不指定现实目的地，不做路线导航。",
                 "动物发现只用于远距离观察和虚拟领养，不鼓励触摸、追赶或投喂。",
