@@ -24,6 +24,9 @@ class AnimalClue:
     rarity: str
     knowledge: str
     safety_tip: str
+    favorite: str
+    habitat: str
+    greeting: str
     friendship: int = 25
     xp: int = 15
 
@@ -70,6 +73,9 @@ ANIMAL_CLUES: list[AnimalClue] = [
         rarity="common",
         knowledge="麻雀常在灌木、草地和屋檐附近活动，会寻找种子和小虫。",
         safety_tip="远距离观察，不追赶、不投喂。",
+        favorite="阳光花蜜",
+        habitat="草地边缘和灌木旁",
+        greeting="麻雀在远处跳了两下，像是在回应你的观察。",
     ),
     AnimalClue(
         key="butterfly",
@@ -78,6 +84,9 @@ ANIMAL_CLUES: list[AnimalClue] = [
         rarity="common",
         knowledge="蝴蝶会在花朵附近吸食花蜜，也是植物传粉的帮手。",
         safety_tip="不要触碰翅膀，保持距离观察飞行路线。",
+        favorite="清新嫩叶",
+        habitat="花丛和草地",
+        greeting="蝴蝶绕着花朵飞了一圈，留下新的观察线索。",
     ),
     AnimalClue(
         key="snail",
@@ -86,8 +95,18 @@ ANIMAL_CLUES: list[AnimalClue] = [
         rarity="uncommon",
         knowledge="蜗牛喜欢潮湿环境，雨后更容易看到活动痕迹。",
         safety_tip="观察后不要带回家，也不要放到危险路面。",
+        favorite="树荫果实",
+        habitat="潮湿树荫和落叶下",
+        greeting="蜗牛慢慢探出触角，留下了一条安静的小路。",
     ),
 ]
+
+
+ANIMAL_INTERACTIONS = {
+    "observe": {"label": "观察", "friendship": 8, "xp": 5, "message": "你保持距离观察，伙伴更信任你了。"},
+    "greet": {"label": "打招呼", "friendship": 10, "xp": 5, "message": "你轻轻打招呼，伙伴回应了你的陪伴。"},
+    "care": {"label": "照顾伙伴", "friendship": 15, "xp": 8, "message": "你用今天的发现照顾伙伴，友好度提升了。"},
+}
 
 
 FOOD_EFFECTS = {
@@ -109,3 +128,9 @@ def choose_plant(sequence: int, hint: str | None = None) -> Plant:
 def choose_animal(sequence: int) -> AnimalClue:
     return ANIMAL_CLUES[sequence % len(ANIMAL_CLUES)]
 
+
+def animal_by_key(animal_key: str) -> AnimalClue | None:
+    for animal in ANIMAL_CLUES:
+        if animal.key == animal_key:
+            return animal
+    return None
