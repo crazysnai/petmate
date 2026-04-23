@@ -67,8 +67,19 @@ st.markdown(
         color: inherit !important;
       }
       .block-container {
-        padding-top: 1.4rem;
+        padding-top: 3.2rem;
         max-width: 1180px;
+      }
+      [data-testid="stTabs"] [role="tablist"] {
+        min-height: 3.2rem;
+        padding-top: .35rem;
+        overflow: visible;
+      }
+      [data-testid="stTabs"] button[role="tab"] {
+        min-height: 2.6rem;
+        line-height: 1.35;
+        padding-top: .55rem;
+        padding-bottom: .55rem;
       }
       h1, h2, h3 {
         letter-spacing: 0 !important;
@@ -96,6 +107,7 @@ st.markdown(
       }
       @media (max-width: 760px) {
         .block-container {
+          padding-top: 3.8rem;
           padding-left: .9rem;
           padding-right: .9rem;
         }
