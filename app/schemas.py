@@ -39,3 +39,9 @@ class GuardianSettingsUpdate(BaseModel):
     animal_clues_enabled: bool = True
     daily_distance_goal: int = Field(default=500, ge=100, le=3000)
     max_daily_distance: int = Field(default=3000, ge=500, le=10000)
+
+
+class AnimalInteract(BaseModel):
+    child_id: int
+    animal_key: str = Field(min_length=1, max_length=32)
+    action: str = Field(pattern="^(observe|greet|care)$")

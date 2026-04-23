@@ -1,10 +1,24 @@
 from __future__ import annotations
 
 import sqlite3
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
-DB_PATH = Path(__file__).resolve().parents[1] / "petmate.db"
+DEFAULT_LOCAL_DB_PATH = Path(__file__).resolve().parents[1] / "petmate.db"
+
+
+def resolve_db_path() -> Path:
+    configured = os.getenv("PETMATE_DB_PATH")
+    if configured:
+        return Path(configured)
+    if os.getenv("STREAMLIT_SERVER_PORT") or os.getenv("STREAMLIT_SHARING"):
+        return Path(tempfile.gettempdir()) / "petmate.db"
+    return DEFAULT_LOCAL_DB_PATH
+
+
+DB_PATH = resolve_db_path()
 
 
 def get_db() -> sqlite3.Connection:
@@ -132,6 +146,17 @@ def init_db() -> None:
                 FOREIGN KEY(child_id) REFERENCES child(id) ON DELETE CASCADE,
                 FOREIGN KEY(pet_id) REFERENCES pet(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS animal_interaction_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                child_id INTEGER NOT NULL,
+                animal_key TEXT NOT NULL,
+                animal_name TEXT NOT NULL,
+                action TEXT NOT NULL,
+                friendship_added INTEGER NOT NULL,
+                xp INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(child_id) REFERENCES child(id) ON DELETE CASCADE
+            );
             """
         )
-

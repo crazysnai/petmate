@@ -69,6 +69,19 @@ def main() -> None:
     )
     show("发现动物线索", animal)
 
+    interaction = assert_ok(
+        client.post(
+            "/api/animal/interact",
+            json={
+                "child_id": child_id,
+                "animal_key": animal["animal_clue"]["animal_key"],
+                "action": "greet",
+            },
+        ),
+        "interact with animal",
+    )
+    show("和动物伙伴互动", interaction)
+
     first_food = plant_results[0]["drops"][0]["item_key"]
     feed = assert_ok(
         client.post("/api/pet/feed", json={"child_id": child_id, "food_key": first_food}),
@@ -100,6 +113,7 @@ def main() -> None:
     assert status["pet"]["level"] >= 2, "pet should reach Lv2"
     assert len(encyclopedia["plants"]) >= 3, "three plants should be collected"
     assert len(encyclopedia["animals"]) >= 1, "one animal clue should be collected"
+    assert summary["discoveries"]["animal_interaction_count"] >= 1, "animal interaction should be recorded"
     assert summary["adventure"]["completed"] is True, "daily adventure should be completed"
 
     print("\nDemo passed: walk -> scan -> animal clue -> feed -> level up -> parent summary")
@@ -107,4 +121,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
